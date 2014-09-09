@@ -63,6 +63,10 @@ providing any clear gain.  Clients that rely on redirects double up on
 server traffic and render TLS useless since sensitive data will already
  have been exposed during the first call.
 
+##### In Rails
+
+Should be supportable via Heroku and Rails configuration as we do for existing apps
+
 #### Version with Accepts header
 
 Version the API from the start. Use the `Accepts` header to communicate
@@ -75,6 +79,38 @@ Accept: application/vnd.heroku+json; version=3
 Prefer not to have a default version, instead requiring clients to
 explicitly peg their usage to a specific version.
 
+##### In Rails
+
+[This article](http://www.bignerdranch.com/blog/adding-versions-rails-api/) indicates something like so:
+
+```ruby
+# app/models/api_constraint.rb
+class ApiConstraint
+  attr_reader :version
+ 
+  def initialize(options)
+    @version = options.fetch(:version)
+  end
+ 
+  def matches?(request)
+    request
+      .headers
+      .fetch(:accept)
+      .include?("version=#{version}")
+  end
+end
+
+# configure it in routes:
+scope module: :v1, constraints: ApiConstraint.new(version: 1) do
+  resource :articles # V1::ArticlesController
+end
+
+# register a custom mime type at mime_types.rb
+Mime::Type.register 'application/vnd.articles+json', :articles
+```
+
+This should work with Rails `respond_to` and friends.
+
 #### Support caching with Etags
 
 Include an `ETag` header in all responses, identifying the specific
@@ -82,11 +118,19 @@ version of the returned resource. The user should be able to check for
 staleness in their subsequent requests by supplying the value in the
 `If-None-Match` header.
 
+##### In Rails
+
+`stale?` and `fresh_when` seem to handle conditional gets and set etags as described here.
+
 #### Trace requests with Request-Ids
 
 Include a `Request-Id` header in each API response, populated with a
 UUID value. If both the server and client log these values, it will be
 helpful for tracing and debugging requests.
+
+##### In Rails
+
+Seems like `ActionDispatch::RequestId` provides this.  Not sure if it's configured by default, but it can be.
 
 #### Paginate with Ranges
 
@@ -95,6 +139,10 @@ Use `Content-Range` headers to convey pagination requests. Follow the
 example of the [Heroku Platform API on Ranges](https://devcenter.heroku.com/articles/platform-api-reference#ranges)
 for the details of request and response headers, status codes, limits,
 ordering, and page-walking.
+
+##### In Rails
+
+It's available via `headers`, but not sure if there's a simpler way to access this for pagination.
 
 ### Requests
 
@@ -125,6 +173,10 @@ Return suitable codes to provide additional information when there are errors:
 
 Refer to the [HTTP response code spec](http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html)
 for guidance on status codes for user error and server error cases.
+
+##### In Rails
+
+These are easy enough to do.  4xx response can be configured in `ApplicationController` via `rescue_from`.  Not sure if `ActionController` helps with the 2xx ones other than just being able to send them.
 
 #### Provide full resources where available
 
@@ -183,11 +235,26 @@ $ curl -X POST https://service.com/apps \
 }
 ```
 
+##### In Rails
+
+I think something like this, since we aren't using default JSON encoding
+
+```ruby
+# in mime_types.rb
+ActionDispatch::ParamsParser::DEFAULT_PARSERS[Mime::Type.lookup('application/vnd.application+json')]=lambda do |body|
+  JSON.parse(body)
+end
+```
+
 #### Use consistent path formats
 
 ##### Resource names
 
 Use the plural version of a resource name unless the resource in question is a singleton within the system (for example, in most systems a given user would only ever have one account). This keeps it consistent in the way you refer to particular resources.
+
+##### In Rails
+
+This is rails standard
 
 ##### Actions
 
@@ -204,6 +271,10 @@ e.g.
 ```
 /runs/{run_id}/actions/stop
 ```
+
+##### In Rails
+
+Can do this easily enough if needed
 
 #### Downcase paths and attributes
 
@@ -222,6 +293,10 @@ attribute names can be typed without quotes in JavaScript, e.g.:
 service_class: "first"
 ```
 
+##### In Rails
+
+I think Rails uses underscores by default, but probably could use dashes?  Need to investigate (and/or decide how important this really is)
+
 #### Support non-id dereferencing for convenience
 
 In some cases it may be inconvenient for end-users to provide IDs to
@@ -236,6 +311,10 @@ $ curl https://service.com/apps/www-prod
 ```
 
 Do not accept only names to the exclusion of IDs.
+
+##### In Rails
+
+I think this could be done by overriding `find` in an ActiveRecord, or just by making a custom record.  I don't know how valuable this is, since these endpoints should be generally machine readable.
 
 #### Minimize path nesting
 
@@ -258,6 +337,10 @@ case above where a dyno belongs to an app belongs to an org:
 /dynos/{dyno_id}
 ```
 
+##### In Rails
+
+This is the Rails convention as well.
+
 ### Responses
 
 #### Provide resource (UU)IDs
@@ -272,6 +355,10 @@ Render UUIDs in downcased `8-4-4-4-12` format, e.g.:
 ```
 "id": "01234567-89ab-cdef-0123-456789abcdef"
 ```
+
+##### In Rails
+
+According to [this article](http://blog.crowdint.com/2013/10/09/using-postgres-uuids-as-primary-keys-on-rails.html) this could be done with a postgres extension (that is available on Heroku Postgres).  There are some downsides to this, insomuch as these keys are bigger and create larger indexes.
 
 #### Provide standard timestamps
 
@@ -290,6 +377,10 @@ e.g:
 These timestamps may not make sense for some resources, in which case
 they can be omitted.
 
+##### In Rails
+
+These are provided in ActiveRecords by default in Rails.
+
 #### Use UTC times formatted in ISO8601
 
 Accept and return times in UTC only. Render times in ISO8601 format,
@@ -299,6 +390,17 @@ e.g.:
 "finished_at": "2012-01-01T12:00:00Z"
 ```
 
+##### In Rails
+
+Rails may just support this format, but if not, we can specify it like so:
+
+```ruby
+class ActiveSupport::TimeWithZone
+    def as_json(options = {})
+        strftime('%Y-%m-%dT%H:%M:%S%z');
+    end
+end
+```
 #### Nest foreign key relations
 
 Serialize foreign key references with a nested object, e.g.:
@@ -338,6 +440,9 @@ or introduce more top-level response fields, e.g.:
   ...
 }
 ```
+##### In Rails
+
+This may not work out of the box.  Need to investigate this more.  This seems like a logical standard, but not sure if Rails will do it.
 
 #### Generate structured errors
 
