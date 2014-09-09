@@ -466,6 +466,10 @@ HTTP/1.1 429 Too Many Requests
 Document your error format and the possible error `id`s that clients may
 encounter.
 
+##### In Rails
+
+Possible we could do this with custom rendering/mime type, but likely may need to be helpers and `if` statements in controllers.  To be investigated.
+
 #### Show rate limit status
 
 Rate limit requests from clients to protect the health of the service
@@ -475,6 +479,10 @@ quantify request limits.
 
 Return the remaining number of request tokens with each request in the
 `RateLimit-Remaining` response header.
+
+##### In Rails
+
+This will either need to be a custom middleware or trusting an out-of-date gem.
 
 #### Keep JSON minified in all responses
 
@@ -504,6 +512,10 @@ more verbose response, either via a query parameter (e.g. `?pretty=true`)
 or via an `Accept` header param (e.g.
 `Accept: application/vnd.heroku+json; version=3; indent=4;`).
 
+##### In Rails
+
+Should be default in rails.
+
 ### Artifacts
 
 #### Provide machine-readable JSON schema
@@ -511,6 +523,10 @@ or via an `Accept` header param (e.g.
 Provide a machine-readable schema to exactly specify your API. Use
 [prmd](https://github.com/interagent/prmd) to manage your schema, and ensure
 it validates with `prmd verify`.
+
+##### In Rails
+
+On our own for this.  `prmd` looks decent
 
 #### Provide human-readable docs
 
@@ -530,6 +546,10 @@ information about:
 * Error serialization format.
 * Examples of using the API with clients in different languages.
 
+##### In Rails
+
+Ibid, though we could use rubydoc possibly.
+
 #### Provide executable examples
 
 Provide executable examples that users can type directly into their
@@ -544,6 +564,10 @@ $ curl -is https://$TOKEN@service.com/users
 
 If you use [prmd](https://github.com/interagent/prmd) to generate Markdown
 docs, you will get examples for each endpoint for free.
+
+##### In Rails
+
+Could do this in a staging server or a special server with canned data?  TBD, but nothing Rails will do here.
 
 #### Describe stability
 
